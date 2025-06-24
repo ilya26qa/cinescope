@@ -65,31 +65,4 @@ class TestBookings:
         for key, value in new_payload.items():
             assert change_booking.json().get(key) == value, f'{key} не совпадает'
 
-    def test_change_all_data_booking2(self, auth_session, booking_data):
-        # может создание бронирование нужно вынести в фикстуру?
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
-        assert create_booking.status_code == 200, "Ошибка при создании брони"
 
-        booking_id = create_booking.json().get("bookingid")
-        assert booking_id is not None, "Идентификатор брони не найден в ответе"
-
-        new_payload = {
-            "firstname": faker.first_name(),
-            "lastname": faker.last_name(),
-            "totalprice": faker.random_int(min=100, max=100000),
-            "depositpaid": False,
-            "bookingdates": {
-                    "checkin": "2028-04-05",
-                    "checkout": "2028-04-08"
-            },
-            "additionalneeds": "blowjob"
-        }
-
-        change_booking = auth_session.put(f"{BASE_URL}/booking/{booking_id}", json=new_payload)
-        assert change_booking.status_code == 200, 'Бронь не изменена'
-
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
-        assert get_booking.json() == new_payload, 'Ответ по запросу не совпадает'
-
-        for key, value in new_payload.items():
-            assert get_booking.json().get(key) == value, f'{key} не совпадает'

@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 from faker import Faker
 from constants import HEADERS, BASE_URL
@@ -47,28 +49,14 @@ class TestBookings:
             },
             "additionalneeds": "blowjob"
         }
-
-        # первый вариант
         change_booking = auth_session.put(f"{BASE_URL}/booking/{booking_id}", json=new_payload)
-        assert change_booking.status_code == 200, 'Бронь не изменена'
-        assert change_booking.json() == new_payload, 'Ответ по запросу не совпадает'
-        # второй вариант
-        assert change_booking.json()["firstname"] == new_payload["firstname"], 'имя не совпадает'
-        assert change_booking.json()["lastname"] == new_payload["lastname"], 'фамилия не совпадает'
-        assert change_booking.json()["totalprice"] == new_payload["totalprice"], 'цена не совпадает'
-        assert change_booking.json()["depositpaid"] == False, 'статус оплаты не совпадает'
-        assert (change_booking.json()["bookingdates"]["checkin"] ==
-                new_payload["bookingdates"]["checkin"]), 'дата заезда не совпадает'
-        assert (change_booking.json()["bookingdates"]["checkout"] ==
-                new_payload["bookingdates"]["checkout"]), 'дата выезда не совпадает'
-        assert change_booking.json()['additionalneeds'] == new_payload["additionalneeds"], 'доп услуга не совпадает'
-        # третий вариант
+
         for key, value in new_payload.items():
             assert change_booking.json().get(key) == value, f'{key} не совпадает'
 
     def test_patch_booking(self, auth_session, booking_data):
         create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
-        booking_id = create_booking.json().pop("bookingid")
+        booking_id = create_booking.json().get("bookingid")
 
         new_payload = {
             "firstname": faker.first_name(),
@@ -80,7 +68,7 @@ class TestBookings:
         }
         patch_booking = auth_session.patch(f"{BASE_URL}/booking/{booking_id}", json=new_payload)
         assert patch_booking.status_code == 200, 'не удалось пропатчить'
-
+        print(create_booking.json())
         get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
 
         for key, value in get_booking.json().items():
@@ -89,4 +77,36 @@ class TestBookings:
             else:
                 assert value == create_booking.json()["booking"].get(key), (f'изменилось значение {key}, которое не'
                                                                             f' должно меняться ')
+
+    def test_get_incorrect_booking(self, auth_session):
+        incorrect_id = faker.random_letters(5)
+        get_booking = auth_session.get(f"{BASE_URL}/booking/{incorrect_id}")
+        assert get_booking.status_code == 404, 'ожидался 404 статус код'
+        assert get_booking.text == 'Not Found'
+
+    def test_create_booking_without_required_fields(self, auth_session, booking_data):
+        payload = copy.deepcopy(booking_data)
+        payload.pop("firstname")
+        customer_lastname = payload["lastname"]
+        get_count = auth_session.get(f"{BASE_URL}/booking", params={"lastname": customer_lastname})
+        booking_count = len(get_count.json())
+
+        create_booking = auth_session.post(f"{BASE_URL}/booking", json=payload)
+        assert create_booking.status_code in (500, 400), 'статус код отличается от ожидаемого'
+
+        count_after_try = auth_session.get(f"{BASE_URL}/booking", params={"lastname": customer_lastname})
+        booking_count_after_try = len(count_after_try.json())
+        assert booking_count == booking_count_after_try, 'создана бронь без обязательных полей'
+
+    def test_patch_booking_incorrect_type(self, auth_session, booking_data):
+        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
+        booking_id = create_booking.json().get("bookingid")
+
+        int_lastname = faker.random_int()
+        patch_booking = auth_session.patch(f"{BASE_URL}/booking/{booking_id}", json={"lastname": int_lastname})
+        assert patch_booking.status_code in (400, 500), 'частичное обновление с некорректным типом данных прошел'
+
+        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
+        assert get_booking.json().get("lastname") != int_lastname, 'изменено поле на неправильный тип данных'
+
 

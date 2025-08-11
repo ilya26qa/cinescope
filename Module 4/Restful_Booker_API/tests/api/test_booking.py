@@ -1,61 +1,50 @@
 import copy
 
-import pytest
 from faker import Faker
-from constants import HEADERS, BASE_URL
+from Restful_Booker_API.constants import BASE_URL, BOOKING_ENDPOINT, HEADERS
 
 faker = Faker()
 
 
 class TestBookings:
-    def test_create_booking(self, auth_session, booking_data):
-        # Создаём бронирование
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
-        assert create_booking.status_code == 200, "Ошибка при создании брони"
+    def test_create_booking(self, requester, test_booking):
+        """
+        Тест на создание бронирования. Очень много проверок в одной тестовой функции, возможно стоит разделить на
+        отдельные тесты, но не уверен, так как все проверки относятся к созданию бронирования
+        :param requester: Фикстура.
+        :param test_booking: Фикстура.
+        """
+        response = requester.send_request(
+            method="POST",
+            endpoint=BOOKING_ENDPOINT,
+            data=test_booking,
+        )
 
-        booking_id = create_booking.json().get("bookingid")
+        booking_id = response.json().get("bookingid")
         assert booking_id is not None, "Идентификатор брони не найден в ответе"
-        assert create_booking.json()["booking"]["firstname"] == booking_data["firstname"], "Заданное имя не совпадает"
-        assert create_booking.json()["booking"]["totalprice"] == booking_data["totalprice"], ("Заданная стоимость не "
+        assert response.json()["booking"]["firstname"] == test_booking["firstname"], "Заданное имя не совпадает"
+        assert response.json()["booking"]["totalprice"] == test_booking["totalprice"], ("Заданная стоимость не "
                                                                                               "совпадает")
         # Проверяем, что бронирование можно получить по ID
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
-        assert get_booking.status_code == 200, "Бронь не найдена"
-        assert get_booking.json()["lastname"] == booking_data["lastname"], "Заданная фамилия не совпадает"
 
-        # Удаляем бронирование
-        deleted_booking = auth_session.delete(f"{BASE_URL}/booking/{booking_id}")
-        assert deleted_booking.status_code == 201, "Бронь не удалилась"
+        get_booking = requester.send_request(
+            method="GET",
+            endpoint=f"{BOOKING_ENDPOINT}/{booking_id}"
+        )
+        assert get_booking.json()["lastname"] == test_booking["lastname"], "Заданная фамилия не совпадает"
 
-        # Проверяем, что бронирование больше недоступно
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
-        assert get_booking.status_code == 404, "Бронь не удалилась"
+    def test_change_all_data_booking(self, requester, get_token, created_booking, test_booking):
+        response = requester.send_request(
+            method="PUT",
+            endpoint=f"{BOOKING_ENDPOINT}/{created_booking['id']}",
+            data=test_booking
+        )
 
-    def test_change_all_data_booking(self, auth_session, booking_data):
-        # может создание бронирование нужно вынести в фикстуру?
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
+        for key, value in response.json().items():
+            assert created_booking.get(key) == value, f'{key} не совпадает'
 
-        booking_id = create_booking.json().get("bookingid")
-        assert booking_id is not None, "Идентификатор брони не найден в ответе"
-
-        new_payload = {
-            "firstname": faker.first_name(),
-            "lastname": faker.last_name(),
-            "totalprice": faker.random_int(min=100, max=100000),
-            "depositpaid": False,
-            "bookingdates": {
-                    "checkin": "2028-04-05",
-                    "checkout": "2028-04-08"
-            },
-            "additionalneeds": "blowjob"
-        }
-        change_booking = auth_session.put(f"{BASE_URL}/booking/{booking_id}", json=new_payload)
-
-        for key, value in new_payload.items():
-            assert change_booking.json().get(key) == value, f'{key} не совпадает'
-
-    def test_patch_booking(self, auth_session, booking_data):
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
+    def test_patch_booking(self, auth_session, test_booking):
+        create_booking = auth_session.post(f"{BASE_URL}/booking", json=test_booking)
         booking_id = create_booking.json().get("bookingid")
 
         new_payload = {
@@ -84,8 +73,8 @@ class TestBookings:
         assert get_booking.status_code == 404, 'ожидался 404 статус код'
         assert get_booking.text == 'Not Found'
 
-    def test_create_booking_without_required_fields(self, auth_session, booking_data):
-        payload = copy.deepcopy(booking_data)
+    def test_create_booking_without_required_fields(self, auth_session, test_booking):
+        payload = copy.deepcopy(test_booking)
         payload.pop("firstname")
         customer_lastname = payload["lastname"]
         get_count = auth_session.get(f"{BASE_URL}/booking", params={"lastname": customer_lastname})
@@ -98,8 +87,8 @@ class TestBookings:
         booking_count_after_try = len(count_after_try.json())
         assert booking_count == booking_count_after_try, 'создана бронь без обязательных полей'
 
-    def test_patch_booking_incorrect_type(self, auth_session, booking_data):
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=booking_data)
+    def test_patch_booking_incorrect_type(self, auth_session, test_booking):
+        create_booking = auth_session.post(f"{BASE_URL}/booking", json=test_booking)
         booking_id = create_booking.json().get("bookingid")
 
         int_lastname = faker.random_int()

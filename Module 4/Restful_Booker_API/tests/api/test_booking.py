@@ -22,17 +22,17 @@ class TestBookings:
         )
 
         booking_id = response.json().get("bookingid")
-        assert booking_id is not None, "Идентификатор брони не найден в ответе"
-        assert response.json()["booking"]["firstname"] == test_booking["firstname"], "Заданное имя не совпадает"
-        assert response.json()["booking"]["totalprice"] == test_booking["totalprice"], ("Заданная стоимость не "
-                                                                                              "совпадает")
         # Проверяем, что бронирование можно получить по ID
+        assert booking_id is not None, "Идентификатор брони не найден в ответе"
 
         get_booking = requester.send_request(
             method="GET",
             endpoint=f"{BOOKING_ENDPOINT}/{booking_id}"
         )
         assert get_booking.json()["lastname"] == test_booking["lastname"], "Заданная фамилия не совпадает"
+        assert response.json()["booking"]["firstname"] == test_booking["firstname"], "Заданное имя не совпадает"
+        assert response.json()["booking"]["totalprice"] == test_booking["totalprice"], ("Заданная стоимость не "
+                                                                                        "совпадает")
 
     def test_change_all_data_booking(self, requester, get_token, created_booking, test_booking):
         """

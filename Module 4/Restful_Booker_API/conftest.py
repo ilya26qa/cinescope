@@ -55,7 +55,8 @@ def created_booking(requester, test_booking):
     response_data = response.json()
     created_booking = test_booking.copy()
     created_booking["id"] = response_data["bookingid"]
-    return created_booking
+    yield created_booking
+    pass
 
 
 @pytest.fixture(scope="session")

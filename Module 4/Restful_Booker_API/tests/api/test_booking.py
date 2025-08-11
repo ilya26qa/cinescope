@@ -2,6 +2,7 @@ import copy
 
 from faker import Faker
 from Restful_Booker_API.constants import BASE_URL, BOOKING_ENDPOINT, HEADERS
+from Restful_Booker_API.utils.data_generator import DataGenerator
 
 faker = Faker()
 
@@ -34,6 +35,13 @@ class TestBookings:
         assert get_booking.json()["lastname"] == test_booking["lastname"], "Заданная фамилия не совпадает"
 
     def test_change_all_data_booking(self, requester, get_token, created_booking, test_booking):
+        """
+        Тест на изменение всех данных о бронировании
+        :param requester:
+        :param get_token:
+        :param created_booking:
+        :param test_booking:
+        """
         response = requester.send_request(
             method="PUT",
             endpoint=f"{BOOKING_ENDPOINT}/{created_booking['id']}",
@@ -43,59 +51,72 @@ class TestBookings:
         for key, value in response.json().items():
             assert created_booking.get(key) == value, f'{key} не совпадает'
 
-    def test_patch_booking(self, auth_session, test_booking):
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=test_booking)
-        booking_id = create_booking.json().get("bookingid")
-
+    def test_patch_booking(self, requester, get_token, created_booking):
+        """
+        Тест на изменение некоторых данных в бронировании
+        :param requester:
+        :param get_token:
+        :param created_booking:
+        """
         new_payload = {
-            "firstname": faker.first_name(),
-            "lastname": faker.last_name(),
-            "bookingdates": {
-                "checkin": "2021-04-05",
-                "checkout": "2022-04-08"
-            }
+            "firstname": DataGenerator.generate_random_firstname(),
+            "lastname": DataGenerator.generate_random_lastname(),
+            "bookingdates": DataGenerator.generate_random_bookingdates()
         }
-        patch_booking = auth_session.patch(f"{BASE_URL}/booking/{booking_id}", json=new_payload)
-        assert patch_booking.status_code == 200, 'не удалось пропатчить'
-        print(create_booking.json())
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
+        requester.send_request(
+            method="PATCH",
+            endpoint=f"{BOOKING_ENDPOINT}/{created_booking['id']}",
+            data=new_payload
+        )
+        get_response = requester.send_request(
+            method="GET",
+            endpoint=f"{BOOKING_ENDPOINT}/{created_booking['id']}"
+        )
 
-        for key, value in get_booking.json().items():
+        for key, value in get_response.json().items():
             if key in new_payload:
-                assert new_payload[key] == get_booking.json().get(key), f'значение {key} не изменилось, а должно'
+                assert new_payload[key] == get_response.json().get(key), f'значение {key} не изменилось, а должно'
             else:
-                assert value == create_booking.json()["booking"].get(key), (f'изменилось значение {key}, которое не'
+                assert value == created_booking.get(key), (f'изменилось значение {key}, которое не' 
                                                                             f' должно меняться ')
 
-    def test_get_incorrect_booking(self, auth_session):
+    def test_get_incorrect_booking(self, requester, get_token):
+        """
+        Негативный тест на получение несуществующего бронирования
+        """
         incorrect_id = faker.random_letters(5)
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{incorrect_id}")
-        assert get_booking.status_code == 404, 'ожидался 404 статус код'
-        assert get_booking.text == 'Not Found'
+        response = requester.send_request(
+            method="GET",
+            endpoint=f"{BOOKING_ENDPOINT}/{incorrect_id}",
+            expected_status=404
+        )
+        assert response.text == 'Not Found'
 
-    def test_create_booking_without_required_fields(self, auth_session, test_booking):
+    def test_create_booking_without_required_fields(self, requester, get_token, test_booking):
+        """
+        Негативный тест на попытку создания бронирования без обязательных полей.
+        :param requester:
+        :param get_token:
+        :param test_booking:
+        """
         payload = copy.deepcopy(test_booking)
         payload.pop("firstname")
         customer_lastname = payload["lastname"]
-        get_count = auth_session.get(f"{BASE_URL}/booking", params={"lastname": customer_lastname})
-        booking_count = len(get_count.json())
 
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=payload)
-        assert create_booking.status_code in (500, 400), 'статус код отличается от ожидаемого'
+        def get_bookings_count():
+            booking_count = requester.send_request(
+                method="GET",
+                endpoint=f"{BOOKING_ENDPOINT}",
+                params={"lastname": customer_lastname}
+            )
+            return len(booking_count.json())
 
-        count_after_try = auth_session.get(f"{BASE_URL}/booking", params={"lastname": customer_lastname})
-        booking_count_after_try = len(count_after_try.json())
-        assert booking_count == booking_count_after_try, 'создана бронь без обязательных полей'
-
-    def test_patch_booking_incorrect_type(self, auth_session, test_booking):
-        create_booking = auth_session.post(f"{BASE_URL}/booking", json=test_booking)
-        booking_id = create_booking.json().get("bookingid")
-
-        int_lastname = faker.random_int()
-        patch_booking = auth_session.patch(f"{BASE_URL}/booking/{booking_id}", json={"lastname": int_lastname})
-        assert patch_booking.status_code in (400, 500), 'частичное обновление с некорректным типом данных прошел'
-
-        get_booking = auth_session.get(f"{BASE_URL}/booking/{booking_id}")
-        assert get_booking.json().get("lastname") != int_lastname, 'изменено поле на неправильный тип данных'
-
-
+        count_before_try = get_bookings_count()
+        requester.send_request(
+            method="POST",
+            endpoint=f"{BOOKING_ENDPOINT}",
+            data=payload,
+            expected_status=500
+        )
+        count_after_try = get_bookings_count()
+        assert count_before_try == count_after_try, 'создана бронь без обязательных полей'

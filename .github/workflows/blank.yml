@@ -71,7 +71,7 @@ jobs:
     - name: Run tests
       run: |
         # Запуск конкретного теста с генерацией Allure-отчета
-        python -m pytest tests/api/test_get_movies.py::TestGetMovies::test_get_movies_default -v --alluredir=allure-results
+        python -m pytest tests/api/movies/test_get_movies.py::TestGetMovie::test_get_movies -v --alluredir=allure-results
 
     # Шаг 7: Сохранение результатов тестов как артефакта
     - name: Upload Allure results

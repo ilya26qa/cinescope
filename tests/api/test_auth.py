@@ -58,5 +58,5 @@ class TestAuth:
         with allure.step('Проверка сообщения в теле ответа'):
             with check:
                 assert response_data['message'] == AUTH_ERR_MSG, \
-                    f'Expected error message: "{AUTH_ERR_MSG}", got "{response_data['message']}"'
+                    f"Expected error message: '{AUTH_ERR_MSG}', got '{response_data['message']}'"
         admin.api.user_api.delete_user(registered_user.id, expected_status=200)

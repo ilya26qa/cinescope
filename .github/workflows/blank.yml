@@ -12,7 +12,7 @@ on:
 # Определение jobs (заданий)
 jobs:
   # Job с именем "test"
-  test:
+  Lint-and-tests:
     # Запуск на последней версии Ubuntu
     runs-on: ubuntu-latest
 
@@ -39,29 +39,11 @@ jobs:
         # Устанавливаем зависимости из requirements.txt
         pip install -r requirements.txt
         # Устанавливаем дополнительные пакеты для тестирования
-        pip install pytest pytest-check allure-pytest
-
-    # Шаг 4: Установка Allure Commandline
-    - name: Install Allure Commandline
-      run: |
-        # Обновляем список пакетов Ubuntu
-        sudo apt-get update
-        # Устанавливаем Java Runtime (требование для Allure)
-        sudo apt-get install default-jre -y
-        # Скачиваем архив Allure версии 2.24.1
-        wget https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.tgz
-        # Распаковываем архив в /opt/
-        tar -zxvf allure-2.24.1.tgz -C /opt/
-        # Создаем симлинк для доступа к allure из любой директории
-        sudo ln -s /opt/allure-2.24.1/bin/allure /usr/bin/allure
-        # Добавляем путь к Allure в переменную PATH
-        echo "/opt/allure-2.24.1/bin" >> $GITHUB_PATH
+        pip install pytest pytest-check allure-pytest flake8
 
     # Шаг 5: Запуск линтера flake8
     - name: Run linter
       run: |
-        # Устанавливаем flake8
-        pip install flake8
         # Запускаем flake8 с проверкой критических ошибок
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # Закомментированная строка: расширенная проверка стиля кода
@@ -75,6 +57,7 @@ jobs:
 
     # Шаг 7: Сохранение результатов тестов как артефакта
     - name: Upload Allure results
+      if: success() || failure()
       # Используем действие для загрузки артефактов
       uses: actions/upload-artifact@v4
       with:
@@ -85,15 +68,44 @@ jobs:
         # Сколько дней хранить артефакт (максимум 90)
         retention-days: 5
 
-    # Шаг 8: Генерация Allure-отчета
-    - name: Generate Allure report
-      # Выполнять всегда, даже если предыдущие шаги завершились с ошибкой
-      if: always()
-      run: |
-        # Генерация HTML-отчета из результатов тестов
-        allure generate allure-results -o allure-report --clean
-        # Выводим в лог инструкцию для локального использования:
-        echo allure serve allure-results
-        echo C:\Users\Квадрат\scoop\apps\allure\current\bin\allure.bat serve ./allure-results
+  allure-report:
+    name: Generate Allure report
+    runs-on: ubuntu-latest
+    needs: Lint-and-tests   # для запуска необходим успешный стейдж
+
+    steps:
+      - name: Download Allure results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Install Java
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jre
+
+      - name: Install Allure
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.tgz
+          tar -zxvf allure-2.24.1.tgz
+          sudo mv allure-2.24.1 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+
+      - name: Generate Allure report
+        run: |
+          allure generate allure-results -o allure-report --clean
+
+      - name: Upload Allure report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 5
+
+      - name: Instructions how to open allure result
+        run: |
+          echo "Распаковать артефакт и запустить:"
+          echo "allure serve allure-results"
 
 

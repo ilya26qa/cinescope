@@ -104,8 +104,7 @@ class TestTodayIsHolidayServiceAPI:
             current_date_time = world_clock_response.currentDateTime
             print(f"Текущая дата и время: {current_date_time=}")
         with (allure.step('Проверка совпадения даты и времени')):
-            assert current_date_time == datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%MZ"),
-            "Дата не совпадает"
+            assert current_date_time == datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%MZ"), "Дата не совпадает"
 
     @allure.title('Проверка работоспособности Fake-сервиса what_is_today')
     @pytest.mark.integration

@@ -1,0 +1,111 @@
+
+name: Add CI
+
+# Триггеры запуска:
+on:
+  # Запускать при любом push в репозиторий
+  push: {}
+  # Запускать при создании pull request в ветку main
+  pull_request:
+    branches: [ main ]
+
+# Определение jobs (заданий)
+jobs:
+  # Job с именем "test"
+  Lint-and-tests:
+    # Запуск на последней версии Ubuntu
+    runs-on: ubuntu-latest
+
+    # Последовательность шагов
+    steps:
+    # Шаг 1: Получение кода из репозитория
+    - name: Checkout code
+      # Используем стандартное действие для checkout (версия 4)
+      uses: actions/checkout@v4
+
+    # Шаг 2: Настройка Python окружения
+    - name: Set up Python
+      # Официальное действие для установки Python
+      uses: actions/setup-python@v4
+      with:
+        # Указываем конкретную версию Python (3.10)
+        python-version: '3.10'
+
+    # Шаг 3: Установка зависимостей Python
+    - name: Install dependencies
+      run: |
+        # Обновляем pip до последней версии
+        python -m pip install --upgrade pip
+        # Устанавливаем зависимости из requirements.txt
+        pip install -r requirements.txt
+        # Устанавливаем дополнительные пакеты для тестирования
+        pip install pytest pytest-check allure-pytest flake8
+
+    # Шаг 5: Запуск линтера flake8
+    - name: Run linter
+      run: |
+        # Запускаем flake8 с проверкой критических ошибок
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Закомментированная строка: расширенная проверка стиля кода
+        # flake8 . --count --exit-zero --max-complexity=10 --max-line-length=200 --statistics
+
+    # Шаг 6: Запуск тестов
+    - name: Run tests
+      run: |
+        # Запуск конкретного теста с генерацией Allure-отчета
+        python -m pytest tests/api/movies/test_get_movies.py::TestGetMovie::test_get_movies -v --alluredir=allure-results
+
+    # Шаг 7: Сохранение результатов тестов как артефакта
+    - name: Upload Allure results
+      if: success() || failure()
+      # Используем действие для загрузки артефактов
+      uses: actions/upload-artifact@v4
+      with:
+        # Имя артефакта
+        name: allure-results
+        # Путь к файлам результатов
+        path: allure-results/
+        # Сколько дней хранить артефакт (максимум 90)
+        retention-days: 5
+
+  allure-report:
+    name: Generate Allure report
+    runs-on: ubuntu-latest
+    needs: Lint-and-tests   # для запуска необходим успешный стейдж
+
+    steps:
+      - name: Download Allure results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Install Java
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jre
+
+      - name: Install Allure
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.tgz
+          tar -zxvf allure-2.24.1.tgz
+          sudo mv allure-2.24.1 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+
+      - name: Generate Allure report
+        run: |
+          allure generate allure-results -o allure-report --clean
+
+      - name: Upload Allure report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 5
+
+      - name: Instructions how to open allure result
+        run: |
+          echo "Распаковать артефакт и запустить:"
+          echo "allure serve allure-results"
+
+

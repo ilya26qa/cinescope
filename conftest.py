@@ -37,7 +37,7 @@ def browser(playwright):
     :param playwright: фикстура playwright
     """
     with allure.step('Создание экземпляра браузера'):
-        browser = playwright.chromium.launch(headless=False, args=['--start-maximized'])
+        browser = playwright.chromium.launch(headless=True, args=['--start-maximized'])
         yield browser
         browser.close()
 
